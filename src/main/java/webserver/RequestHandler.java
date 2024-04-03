@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
+import db.DataBase;
+import javafx.util.Pair;
 import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +19,16 @@ public class RequestHandler extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
     private Socket connection;
+    private DataBase db;
 
-    public RequestHandler(Socket connectionSocket) {
+    private static final String DEFAULT_PATH = "/index.html";
+    private static final String CREATE_USER_PATH = "/user/create";
+    private static final String LOGIN_PATH = "/user/login";
+    private static final String LOGIN_FAIL_PATH = "/user/login_failed.html";
+
+    public RequestHandler(Socket connectionSocket, DataBase db) {
         this.connection = connectionSocket;
+        this.db = db;
     }
 
     public void run() {
@@ -33,7 +42,6 @@ public class RequestHandler extends Thread {
             DataOutputStream dos = new DataOutputStream(out);
             body = "Hello World".getBytes();
 
-
             if (header.get("method").equals("GET")){
                 if (header.get("path") != null || !header.get("path").equals("")) {
                     log.debug("request path : {}", header.get("path"));
@@ -42,11 +50,10 @@ public class RequestHandler extends Thread {
                 response200Header(dos, body.length);
                 responseBody(dos, body);
             } else if (header.get("method").equals("POST")) {
-                Map<String, String> parameters = HttpRequestUtils.parseQueryString(header.get("body"));
-                User user = storeUser(parameters);
-                String location = "/index.html";
-                response302Header(dos, location);
-                responseBody(dos, body);
+                Pair<String, String> responseInfo = handlePostRequest(header);
+                String path = responseInfo.getKey();
+                String isLogin = responseInfo.getValue();
+                response302Header(dos, path, isLogin);
             }
         } catch (IOException e) {
             log.error(e.getMessage());
@@ -102,10 +109,11 @@ public class RequestHandler extends Thread {
         }
     }
 
-    private void response302Header(DataOutputStream dos, String location) {
+    private void response302Header(DataOutputStream dos, String location, String isLogin) {
         try {
             dos.writeBytes("HTTP/1.1 302 Found \r\n");
             dos.writeBytes("Location: " + location + "\r\n");
+            dos.writeBytes("Set-Cookie: logined="+isLogin+ "\r\n");
             dos.writeBytes("\r\n");
         } catch (IOException e) {
             log.error(e.getMessage());
@@ -119,5 +127,26 @@ public class RequestHandler extends Thread {
         } catch (IOException e) {
             log.error(e.getMessage());
         }
+    }
+    private Pair<String, String> handlePostRequest(Map<String, String> header) {
+        Map<String, String> parameters = HttpRequestUtils.parseQueryString(header.get("body"));
+        String responsePath = DEFAULT_PATH;
+        String url = header.get("path");
+        String isLogin = "false";
+        if (url.equals(CREATE_USER_PATH)) {
+            User user = storeUser(parameters);
+
+            db.addUser(user);
+        }else if (url.equals(LOGIN_PATH)){
+            User user = db.findUserById(parameters.get("userId"));
+            if (user != null && user.getPassword().equals(parameters.get("password"))) {
+                log.debug("Login Success!");
+                isLogin = "true";
+            } else{
+                log.debug("Login Fail!");
+                responsePath = LOGIN_FAIL_PATH;
+            }
+        }
+        return new Pair<>(responsePath, isLogin);
     }
 }

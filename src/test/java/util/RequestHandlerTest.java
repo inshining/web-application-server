@@ -1,5 +1,6 @@
 package util;
 
+import db.DataBase;
 import org.junit.Before;
 import org.junit.Test;
 import webserver.RequestHandler;
@@ -14,7 +15,7 @@ public class RequestHandlerTest {
     @Before
     public void setUp() {
         // Given
-        requestHandler = new RequestHandler(new Socket());
+        requestHandler = new RequestHandler(new Socket(), new DataBase());
         // When
         // Then
     }
