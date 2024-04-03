@@ -11,6 +11,7 @@ import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import util.HttpRequestUtils;
+import util.IOUtils;
 
 public class RequestHandler extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
@@ -32,7 +33,7 @@ public class RequestHandler extends Thread {
             DataOutputStream dos = new DataOutputStream(out);
             body = "Hello World".getBytes();
 
-            Map<String, String> parameters = HttpRequestUtils.parseQueryString(header.get("params"));
+            Map<String, String> parameters = HttpRequestUtils.parseQueryString(header.get("body"));
             User user = storeUser(parameters);
             if (header.get("path") != null || !header.get("path").equals("")) {
                 log.debug("request path : {}", header.get("path"));
@@ -61,18 +62,12 @@ public class RequestHandler extends Thread {
             HttpRequestUtils.Pair pair = HttpRequestUtils.parseHeader(line);
             headers.put(pair.getKey(), pair.getValue());
         }
+        if (headers.get("method").equals("POST")) {
+            int contentLength = Integer.parseInt(headers.get("Content-Length"));
+            headers.put("body",IOUtils.readData(br, contentLength));
+        }
         log.debug("request headers : {}", headers);
         return headers;
-    }
-
-    private static String getPath(String line) {
-        String [] tokens = line.split(" ");
-        if (tokens[0].equals("GET") && tokens[1].startsWith("/")) {
-            String path =  tokens[1];
-            log.debug("request path : {}", path);
-            return path;
-        }
-        return "";
     }
 
     public static String getParams(String url) {
