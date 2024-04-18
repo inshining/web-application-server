@@ -42,21 +42,31 @@ public class RequestHandler extends Thread {
             Map<String, String> header = extractClientContext(br);
             DataOutputStream dos = new DataOutputStream(out);
             body = "Hello World".getBytes();
-            Map<String, String> cookies =HttpRequestUtils.parseCookies(header.get("Cookie"));
+            Map<String, String> cookies = HttpRequestUtils.parseCookies(header.get("Cookie"));
 
-            if (header.get("path") != null || !header.get("path").equals("")) {
-                throw new IOException("Invalid Path");
-            }
-
-            if (header.get("method").equals("GET")){
-                GetResponse response =handleGetMethod(header, cookies);
+            if (header.get("method").equals("GET") && header.get("path").equals(USER_LIST_PATH)) {
+                GetResponse response = handleUserList(header, cookies);
                 if (response.statusCode == 200) {
-                    response200Header(dos, response.body.length);
+                    response200Header(dos, response.body.length, "text/html");
                     responseBody(dos, response.body);
                 } else if (response.statusCode == 302) {
                     response302Header(dos, response.path, "false");
                 }
-            } else if (header.get("method").equals("POST")) {
+            }else if(header.get("method").equals("GET") ) {
+                if (header.get("path").equals("/") || header.get("path").equals("/index.html")) {
+                    header.put("path", DEFAULT_PATH);
+                }
+                String requestPath = header.get("path");
+                Path path = Paths.get("./webapp" + requestPath);
+                body = Files.readAllBytes(path);
+                if (header.get("ACCEPT") == null) {
+                    header.put("ACCEPT", "text/html");
+                }
+                String contentType = header.get("Accept").split(",")[0].trim();
+                response200Header(dos, body.length, contentType);
+                responseBody(dos, body);
+
+            }else if (header.get("method").equals("POST")) {
                 Pair<String, String> responseInfo = handlePostRequest(header);
                 String path = responseInfo.getKey();
                 String isLogin = responseInfo.getValue();
@@ -65,38 +75,32 @@ public class RequestHandler extends Thread {
         } catch (IOException e) {
             log.error(e.getMessage());
         }
-
     }
 
-    private GetResponse handleGetMethod(Map<String, String> header, Map<String, String> cookies) throws IOException {
+    private GetResponse handleUserList(Map<String, String> header, Map<String, String> cookies) throws IOException {
         byte[] body = null;
         String path = new String();
         int statusCode = 200; // 200, 302
 
         log.debug("request path : {}", header.get("path"));
-        if (header.get("path").equals(USER_LIST_PATH)) {
-            boolean isLogin = Boolean.parseBoolean(cookies.get("logined"));
-            if (!isLogin) {
-                statusCode = 302;
-                path = "/user/login.html";
-            } else{
-                Collection<User> users = db.findAll();
-                StringBuilder sb = new StringBuilder();
-                sb.append("<table border='1'>");
-                for (User user : users) {
-                    sb.append("<tr>");
-                    sb.append("<td>" + user.getUserId() + "</td>");
-                    sb.append("<td>" + user.getName() + "</td>");
-                    sb.append("<td>" + user.getEmail() + "</td>");
-                    sb.append("</tr>");
-                }
-                sb.append("</table>");
-                body = sb.toString().getBytes();
+        boolean isLogin = Boolean.parseBoolean(cookies.get("logined"));
+        if (!isLogin) {
+            statusCode = 302;
+            path = "/user/login.html";
+        } else {
+            Collection<User> users = db.findAll();
+            StringBuilder sb = new StringBuilder();
+            sb.append("<table border='1'>");
+            for (User user : users) {
+                sb.append("<tr>");
+                sb.append("<td>" + user.getUserId() + "</td>");
+                sb.append("<td>" + user.getName() + "</td>");
+                sb.append("<td>" + user.getEmail() + "</td>");
+                sb.append("</tr>");
             }
-        } else{
-            body = Files.readAllBytes(Paths.get("./webapp" + header.get("path")));
+            sb.append("</table>");
+            body = sb.toString().getBytes();
         }
-
         GetResponse response = new GetResponse(body, path, statusCode);
         return response;
     }
@@ -138,10 +142,13 @@ public class RequestHandler extends Thread {
         return user;
     }
 
-    private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
+    private void response200Header(DataOutputStream dos, int lengthOfBodyContent, String contentType) {
+        if (contentType == null) {
+            contentType = "text/html";
+        }
         try {
             dos.writeBytes("HTTP/1.1 200 OK \r\n");
-            dos.writeBytes("Content-Type: text/html;charset=utf-8\r\n");
+            dos.writeBytes("Content-Type: "+contentType + ";charset=utf-8\r\n");
             dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
             dos.writeBytes("\r\n");
         } catch (IOException e) {
