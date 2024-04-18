@@ -9,6 +9,7 @@ import java.util.*;
 
 import db.DataBase;
 import javafx.util.Pair;
+import model.GetResponse;
 import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ public class RequestHandler extends Thread {
     private static final String CREATE_USER_PATH = "/user/create";
     private static final String LOGIN_PATH = "/user/login";
     private static final String LOGIN_FAIL_PATH = "/user/login_failed.html";
+    private static final String USER_LIST_PATH = "/user/list";
 
     public RequestHandler(Socket connectionSocket, DataBase db) {
         this.connection = connectionSocket;
@@ -36,19 +38,24 @@ public class RequestHandler extends Thread {
                 connection.getPort());
         byte[] body;
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
-            // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
             BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
             Map<String, String> header = extractClientContext(br);
             DataOutputStream dos = new DataOutputStream(out);
             body = "Hello World".getBytes();
+            Map<String, String> cookies =HttpRequestUtils.parseCookies(header.get("Cookie"));
+
+            if (header.get("path") != null || !header.get("path").equals("")) {
+                throw new IOException("Invalid Path");
+            }
 
             if (header.get("method").equals("GET")){
-                if (header.get("path") != null || !header.get("path").equals("")) {
-                    log.debug("request path : {}", header.get("path"));
-                    body = Files.readAllBytes(Paths.get("./webapp" + header.get("path")));
+                GetResponse response =handleGetMethod(header, cookies);
+                if (response.statusCode == 200) {
+                    response200Header(dos, response.body.length);
+                    responseBody(dos, response.body);
+                } else if (response.statusCode == 302) {
+                    response302Header(dos, response.path, "false");
                 }
-                response200Header(dos, body.length);
-                responseBody(dos, body);
             } else if (header.get("method").equals("POST")) {
                 Pair<String, String> responseInfo = handlePostRequest(header);
                 String path = responseInfo.getKey();
@@ -59,6 +66,39 @@ public class RequestHandler extends Thread {
             log.error(e.getMessage());
         }
 
+    }
+
+    private GetResponse handleGetMethod(Map<String, String> header, Map<String, String> cookies) throws IOException {
+        byte[] body = null;
+        String path = new String();
+        int statusCode = 200; // 200, 302
+
+        log.debug("request path : {}", header.get("path"));
+        if (header.get("path").equals(USER_LIST_PATH)) {
+            boolean isLogin = Boolean.parseBoolean(cookies.get("logined"));
+            if (!isLogin) {
+                statusCode = 302;
+                path = "/user/login.html";
+            } else{
+                Collection<User> users = db.findAll();
+                StringBuilder sb = new StringBuilder();
+                sb.append("<table border='1'>");
+                for (User user : users) {
+                    sb.append("<tr>");
+                    sb.append("<td>" + user.getUserId() + "</td>");
+                    sb.append("<td>" + user.getName() + "</td>");
+                    sb.append("<td>" + user.getEmail() + "</td>");
+                    sb.append("</tr>");
+                }
+                sb.append("</table>");
+                body = sb.toString().getBytes();
+            }
+        } else{
+            body = Files.readAllBytes(Paths.get("./webapp" + header.get("path")));
+        }
+
+        GetResponse response = new GetResponse(body, path, statusCode);
+        return response;
     }
 
     private static Hashtable<String, String> extractClientContext(BufferedReader br) throws IOException {
