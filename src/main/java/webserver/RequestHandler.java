@@ -17,9 +17,11 @@ import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import util.HttpRequest;
 import util.HttpRequestUtils;
 import util.IOUtils;
 import db.DataBase;
+import util.HttpRequest;
 
 public class RequestHandler extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
@@ -35,6 +37,7 @@ public class RequestHandler extends Thread {
                 connection.getPort());
 
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
+
             BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
             String line = br.readLine();
             if (line == null) {
@@ -43,6 +46,8 @@ public class RequestHandler extends Thread {
 
             log.debug("request line : {}", line);
             String[] tokens = line.split(" ");
+
+
 
             int contentLength = 0;
             boolean logined = false;
@@ -114,15 +119,18 @@ public class RequestHandler extends Thread {
         }
     }
 
-    private boolean isLogin(String line) {
-        String[] headerTokens = line.split(":");
-        Map<String, String> cookies = HttpRequestUtils.parseCookies(headerTokens[1].trim());
-        String value = cookies.get("logined");
-        if (value == null) {
-            return false;
-        }
-        return Boolean.parseBoolean(value);
+    private String getDefaultUrl(String[] tokens) {
+        return null;
     }
+
+    private boolean isLogin(String line) {
+        return false;
+    }
+
+    private int getContentLength(String line) {
+        return 0;
+    }
+
 
     private void responseResource(OutputStream out, String url) throws IOException {
         DataOutputStream dos = new DataOutputStream(out);
@@ -138,18 +146,7 @@ public class RequestHandler extends Thread {
         responseBody(dos, body);
     }
 
-    private int getContentLength(String line) {
-        String[] headerTokens = line.split(":");
-        return Integer.parseInt(headerTokens[1].trim());
-    }
 
-    private String getDefaultUrl(String[] tokens) {
-        String url = tokens[1];
-        if (url.equals("/")) {
-            url = "/index.html";
-        }
-        return url;
-    }
 
     private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
         try {

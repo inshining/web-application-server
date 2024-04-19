@@ -1,0 +1,4 @@
+GET /user/create?userId=javaUser&password=javaP&name=javaName&email=java%40java.com HTTP/1.1
+Host: localhost:8080
+Connection: keep-alive
+Accept: */*
