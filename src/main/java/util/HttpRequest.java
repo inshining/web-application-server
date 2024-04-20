@@ -13,27 +13,29 @@ public class HttpRequest {
 
     private static final Logger log = LoggerFactory.getLogger(HttpRequest.class);
 
-    private String method;
+    private HttpMethod method;
     private String path;
-    private Map<String, String> headers;
-    private Map<String, String> params;
-    private Map<String, String> cookies;
+    private Map<String, String> headers = new HashMap<String, String>();
+    private Map<String, String> params = new HashMap<String, String>();
+    private Map<String, String> cookies = new HashMap<String, String>();
 
-    public HttpRequest(InputStream in) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-        String line = br.readLine();
-        if (line == null){
-            throw new IOException("Request is empty");
-        }
-        headers = new HashMap<String,String>();
-        params = new HashMap<String, String>();
+    public HttpRequest(InputStream in) {
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+            String line = br.readLine();
+            if (line == null) {
+                throw new IOException("Request is empty");
+            }
 
-        parseFirstLine(line);
-        parseHeader(br);
+            parseFirstLine(line);
+            parseHeader(br);
 
-        if (method.equals("POST")){
-            String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
-            params = HttpRequestUtils.parseQueryString(body);
+            if (method.isPost()) {
+                String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
+                params = HttpRequestUtils.parseQueryString(body);
+            }
+        } catch (IOException e) {
+            log.error(e.getMessage());
         }
     }
 
@@ -54,7 +56,7 @@ public class HttpRequest {
 
     private void parseFirstLine(String line){
         String[] tokens = line.split(" ");
-        method = tokens[0];
+        method = HttpMethod.valueOf(tokens[0]);
         path = tokens[1];
         if (path.equals("/")){
             path = "/index.html";
@@ -81,7 +83,7 @@ public class HttpRequest {
         return Boolean.parseBoolean(value);
     }
 
-    public String getMethod() {
+    public HttpMethod getMethod() {
         return method;
     }
 

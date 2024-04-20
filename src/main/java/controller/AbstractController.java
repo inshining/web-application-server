@@ -5,9 +5,9 @@ import util.HttpResponse;
 
 public abstract class AbstractController implements Controller{
     public void service(HttpRequest request, HttpResponse response) {
-        if (request.getMethod().equals("POST")) {
+        if (request.getMethod().isPost()) {
             doPost(request, response);
-        } else if (request.getMethod().equals("GET")) {
+        } else if (request.getMethod().isGet()) {
             doGet(request, response);
         }
     }
